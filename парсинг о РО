@@ -1,1 +1,70 @@
-file:///C:/Users/user/Desktop/Кудрявцев%20Д.В/go-web-scraper/scraper.go
+
+package main
+
+import (
+    "fmt"
+    "io/ioutil"
+    "log"
+    "net/http"
+    "os"
+    "regexp"
+    "strconv"
+    "time"
+)
+
+func main() {
+    // сайт для парсинга
+    url := "https://radmon.org/index.php"
+
+    // обнова каждые 60 сек
+    updateInterval := 60
+
+    // бесконечный цикл для непрерывного сбора данных
+    for {
+        // GET-запрос на сайт
+        resp, err := http.Get(url)
+        if err != nil {
+            log.Fatal(err)
+        }
+
+        // читка тела ответа
+        body, err := ioutil.ReadAll(resp.Body)
+        if err != nil {
+            log.Fatal(err)
+        }
+
+        // регулярное выражение для извлечения данных о радиационном фоне
+        re := regexp.MustCompile(`<td class="value">([\d.]+)</td>`)
+
+        //  все совпадения регулярного выражения в теле ответа
+        matches := re.FindAllStringSubmatch(string(body), -1)
+
+        // извлечение значения радиационного фона из совпадений
+        var values []float64
+        for _, match := range matches {
+            value, err := strconv.ParseFloat(match[1], 64)
+            if err != nil {
+                log.Fatal(err)
+            }
+            values = append(values, value)
+        }
+
+        //  новый файл для записи собранных данных или открыть существующий
+        file, err := os.OpenFile("radiation_data.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+        if err != nil {
+            log.Fatal(err)
+        }
+        defer file.Close()
+
+        // записсь собранных данных в файл
+        for _, value := range values {
+            fmt.Fprintln(file, value)
+        }
+
+        // данные были успешно сохранены в файл
+        fmt.Println("Данные о радиационном фоне успешно сохранены в файл radiation_data.txt")
+
+        // Подождать перед следующим обновлением данных
+        time.Sleep(time.Duration(updateInterval) * time.Second)
+    }
+}
